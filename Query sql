@@ -1,0 +1,194 @@
+--Tampilan untuk di Dashboard
+--1
+select
+  count(customer_id) as Total_customers,
+  round(avg(purchase_amount), 2) as Avg_Revenue,
+  round(sum(purchase_amount)/count(customer_id) *100, 2) as AOV,
+  round(avg(review_rating), 2) as Avg_review_rating,
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+
+--2. Total pendapatan yang dihasilkan oleh pelanggan laki-laki dan perempuan
+select 
+  gender, 
+  sum(purchase_amount) as revenue
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by gender
+
+--3. Yang mana customer menggunakan discount tapi masih menghabiskan lebih dari rata rata total seluruh pembelian(nominal)
+select 
+  customer_id,
+  purchase_amount
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+where discount_applied = 'Yes' 
+and purchase_amount >= (select avg(purchase_amount) from `rock-figure-339413.Data3.customer_shopping_behavior`)
+order by 2 asc
+limit 10
+
+--4. 5 product terbaik yang tertinggi rata-rata reviewnya
+select
+  distinct(item_purchased),
+  round(avg(review_rating), 2) as avg_review_rating,
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+order by 2 desc
+limit 5
+--menggunakan window 
+select
+  item_purchased,
+  round(avg(review_rating), 2) as avg_review_rating,
+  row_number() over (order by round(avg(review_rating), 2) desc ) as rank_avg_review_rating
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+limit 5
+
+--5. bandingkan rata-rata jumlah pembelian(nominal) berdasarrkan pada pengiriman standar dan ekpress
+select 
+  shipping_type,
+  round(avg(purchase_amount), 2) as avg_purchase_amount
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+where shipping_type in ('Standard', 'Express')
+group by 1
+
+--6. Apakah pelanggan yang berlangganan lebih banyak, antara pelanggan dan bukan pelanggan 
+--bandingkan denganrata-rata dan total pendapatan
+select
+  subscription_status,
+  count(customer_id) as total_customers,
+  round(avg(purchase_amount), 2) as avg_purchase_amount,
+  round(sum(purchase_amount), 2) as total_purchase_amount,
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+
+--7. 5 produk yang punya presentasi tertinggi pengguna discount
+select 
+  item_purchased,
+  round((sum(case when discount_applied = 'Yes' then 1 else 0 end)/count(*)) * 100, 2) as discount_rate
+  --kenapa menggunakan case karena discount_applied string agar dapat dihitung pengguna discount ya maka di jadikan 1
+  --yes, jika count() dia akan menghitung nilai 0 juga padahal yang diminta hanya nilai 1
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+order by 2 desc
+limit 5
+
+--8. Apa 3 produk yang sering dibeli di setiap kategory
+--di setiap category cari produk yang paling banyak dibeli maksimal 3 produk yang paling laris
+with item_count as(
+  select 
+  category, 
+  item_purchased,
+  count(customer_id) as Total_order,
+  row_number() over(partition by category order by count(customer_id) desc) as item_rank
+  from `rock-figure-339413.Data3.customer_shopping_behavior`
+  group by 1, 2
+)
+
+select item_rank, category, item_purchased, Total_order
+from item_count
+where item_rank <= 3
+
+--9. buat segment sutomer meliputi new, returning, dan loyal berdasarkan jumlah pelanggan
+with customer_type as (
+  select 
+    customer_id,
+    previous_purchases,
+    case 
+      when previous_purchases = 1 then 'New'
+      when previous_purchases between 2 and 10 then 'Returning'
+      else 'Loyal'
+      end as customer_segment
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+)
+select customer_segment, count(*) as jumlah_pelanggan
+from customer_type
+group by 1
+
+
+--10. Apakah customer yang belanja lebih dari 5 kali akan jadi pelanggan
+select 
+  subscription_status,
+  count(*) as repeat_buyers,
+  round((count(*)/sum(count(*)) over()) *100, 2) as repeat_rate
+  --count(*) itu misalnya yes=300, no=200 total semua 500 jadi sum(count(*)) itu 500 itu menghitung % yang repeat
+  --order di setiap yang berlangganan dan tidak
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+where previous_purchases >= 5
+group by 1
+order by 2
+
+--11. Berapa banyak reveneu berkontribusi disetiap kelompok umur
+select 
+  age_group,
+  sum(purchase_amount) as revenue
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+order by 2 desc
+
+--Analisis Frekuensi Pembelian
+select 
+  distinct(customer_id),
+  count(*) as jumlah_transaksi
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+
+--Analisis nilai pembelian
+select
+  ROUND(avg(purchase_amount), 2) as avg_revenue,
+  round((sum(purchase_amount)/count(*)), 2) as AOV
+FROM `rock-figure-339413.Data3.customer_shopping_behavior`
+--total revenue per customer
+select 
+  distinct(customer_id),
+  sum(purchase_amount) as revenue
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+
+--Analisis penggunaan diskon
+select
+  discount_applied,
+  avg(purchase_amount) as avg_revenue,
+  sum(purchase_amount) as total_revenue,
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+
+--Analisis subscription/loyalty
+select 
+  subscription_status,
+  count(customer_id) as jumlah_customers,
+  sum(purchase_amount) as total_revenue,
+  round(avg(purchase_amount), 2) as avg_revenue
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+
+--Analisis kategori produk
+select
+  category,
+  count(item_purchased) as total_barang_terjual,
+  sum(purchase_amount) as total_revenue
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+
+--Analisis Demografi
+select 
+  gender,
+  age_group,
+  sum(purchase_amount) as total_revenue
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1,2
+order by 3 desc
+
+--
+--Analasis metode pembayaran
+select 
+  payment_method,
+  count(*) as jumlah_transaksi,
+  sum(purchase_amount) as total_revenue
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
+
+--Analisis lokasi
+select 
+  location,
+  count(*) as jumlah_customers,
+  sum(purchase_amount) as total_revenue
+from `rock-figure-339413.Data3.customer_shopping_behavior`
+group by 1
